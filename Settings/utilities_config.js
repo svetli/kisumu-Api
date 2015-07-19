@@ -1,19 +1,14 @@
 var Config = {};
 Config.utilities={};
-Config.utilities.Item_ID={};
-Config.utilities.Category={}
-Config.utilities.Item_ID.5={
 
-	   "Amount":1000;
+Config.Item_ID={
+       "type4":{ "Amount":100099,"LOWERL":10,"UPPERL":20,"RATEABOVE":300},
+       "type5":{ "Amount":1000},
+       "type6":{ "UNIT_PRICE":2000,"LOWER_L":5,"UPPER_L":20,"SEWERAGE":200}
+	  
 }
-Config.utilities.Item_ID.4={
 
-	   "Amount":1000;
-}
-Config.utilities.Item_ID.6={
-
-	   "Amount":1000;
-}
 
 
 module.exports = Config
+   

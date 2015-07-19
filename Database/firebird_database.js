@@ -1,5 +1,6 @@
 var fb  = require("node-firebird");
 var async = require("async");
+var utilities= require("../Settings/utilities_config.js");
 var options = {};
  
 options.host = '127.0.0.1';
@@ -233,26 +234,104 @@ var PostData = function (accountData,callback){
    callback(false,"ok");
 }	
 var CalculateTarriff = function (account,callback){
+  //can previous reading be more than current reading ?
+  if (account.currentMeterReading == account.prevoiusMeterReading){account.AccType="Average"}
+  	if (account.currentMeterReading != account.prevoiusMeterReading){account.AccType="Actual"}
+  	//	if (account.currentMeterReading == account.prevoiusMeterReading){}   will be for Minimum
 
  var currunits =(account.currentMeterReading - account.prevoiusMeterReading)/1000;
  var OrgUnits = currunits;
+ var curTotWat ;
+ var curTotSew ;
+ var tarrVal ;
+ var sewerVal ;
  var   DoneUnits = 0;
    if (currunits <= 0){currunits=account.Estimation_Constant/1000}
    
    
        if (account.subcategory_id==10){ //Bulk Suppliers are billed specially
        	 console.log("Bulk Suppliers ..");
-           callback(false,"ok");
+       	 console.log(utilities.Item_ID.type5);
+	       	 curTotWat =currunits * utilities.Item_ID.type5.Amount;
+	       	 curTotSew =currunits * utilities.Item_ID.type5.Amount;
+	       	 tarrVal =currunits * utilities.Item_ID.type5.Amount;
+	       	 sewerVal =currunits * utilities.Item_ID.type5.Amount;
+
+	       	 account.curTotWat =curTotWat;
+       	     account.curTotSew =curTotSew;
+       	     account.tarrVal=tarrVal;
+       	     account.sewerVal=sewerVal;
+           callback(false,account);
           }
         
         else if (account.subcategory_id==2) { //Kiosks are billed specially 
-        	callback(false,"ok");
+        	   	 console.log("Kiosk   ..");
+        	console.log("Curent units " + currunits);
+
+
+        	  if (currunits>= utilities.Item_ID.type4.LOWERL && currunits <= utilities.Item_ID.type4.UPPERL)
+        	  {
+        	  	 curTotWat =utilities.Item_ID.type4.Amount;
+		       	 curTotSew = utilities.Item_ID.type4.Amount;
+		       	 tarrVal =utilities.Item_ID.type4.Amount;
+		       	 sewerVal =utilities.Item_ID.type4.Amount;
+
+		       	 account.curTotWat =curTotWat;
+	       	     account.curTotSew =curTotSew;
+	       	     account.tarrVal=tarrVal;
+	       	     account.sewerVal=sewerVal;
+
+        	  }
+        	  else {
+        	  	curTotWat = utilities.Item_ID.type4.Amount + (utilities.Item_ID.type4.RATEABOVE * (currunits - utilities.Item_ID.type4.UPPERL));
+                curTotSew = utilities.Item_ID.type4.Amount + (utilities.Item_ID.type4.RATEABOVE * (currunits - utilities.Item_ID.type4.UPPERL));
+                tarrVal = utilities.Item_ID.type4.Amount + (utilities.Item_ID.type4.RATEABOVE * (currunits - utilities.Item_ID.type4.UPPERL));
+                sewerVal = utilities.Item_ID.type4.Amount+ (utilities.Item_ID.type4.RATEABOVE * (currunits- utilities.Item_ID.type4.UPPERL));
+                 account.curTotWat =curTotWat;
+	       	     account.curTotSew =curTotSew;
+	       	     account.tarrVal=tarrVal;
+	       	     account.sewerVal=sewerVal;
+        	  }
+        	callback(false,account);
         }  
         else if (account.subcategory_id==13) { //KIWASCO Bulk Sales are billed specially
-        	callback(false,"ok");
+
+        		 console.log("KIWASKO  ..");
+       	 console.log(utilities.Item_ID.type5);
+	       	 curTotWat =currunits * utilities.Item_ID.type5.Amount;
+	       	 curTotSew =currunits * utilities.Item_ID.type5.Amount;
+	       	 tarrVal =currunits * utilities.Item_ID.type5.Amount;
+	       	 sewerVal =currunits * utilities.Item_ID.type5.Amount;
+
+	       	 account.curTotWat =curTotWat;
+       	     account.curTotSew =curTotSew;
+       	     account.tarrVal=tarrVal;
+       	     account.sewerVal=sewerVal;
+        	callback(false,account);
         } 
          else if (account.subcategory_id==14) {  //Boarding Schools are billed separately 
-         	callback(false,"ok");
+
+         	//ZACK TO EXPLAIN ..MORE ON THE LOOP
+        		 console.log("boarding  ..");
+                console.log(utilities.Item_ID.type6);
+                console.log("Current Units " + currunits);
+             if (currunits>= utilities.Item_ID.type6.LOWER_L && currunits <= utilities.Item_ID.type6.UPPER_L)
+        	  {
+        	  	 curTotWat =utilities.Item_ID.type6.UNIT_PRICE;
+		       	 curTotSew = utilities.Item_ID.type6.SEWERAGE;
+		       	 tarrVal =utilities.Item_ID.type6.UNIT_PRICE;
+		       	 sewerVal =utilities.Item_ID.type6.SEWERAGE;
+
+		       	 account.curTotWat =curTotWat;
+	       	     account.curTotSew =curTotSew;
+	       	     account.tarrVal=tarrVal;
+	       	     account.sewerVal=sewerVal;
+
+        	  }else {
+        	  	//there is a loop here ..zack to Clarify
+        	  }
+
+         	callback(false,account);
         }
 
 
