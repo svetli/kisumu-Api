@@ -1,0 +1,6 @@
+create a sequence Generator
+
+CREATE GENERATOR gen_tran_id;
+
+
+select GEN_ID(gen_tran_id, 1) from RDB$DATABASE;

@@ -1,0 +1,12 @@
+{
+  "name": "Kisumu_Billing",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "body-parser": "^1.13.2",
+    "express": "latest"
+  ,"async":"latest","node-firebird":"latest"},
+  "engines": {
+    "node": ">=0.10.0"
+  }
+}

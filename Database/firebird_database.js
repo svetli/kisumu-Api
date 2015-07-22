@@ -41,6 +41,11 @@ function dateYear(month,year,n){
    obj.monthNumber=t;
    obj.monthname=monthNames[t];
    obj.year=year;
+
+
+    console.log("month " + obj.monthNumber);
+    console.log("month name " + obj.monthname);
+    console.log("year " + obj.year);
    }catch (err){
      obj.status=0;
      obj.error="Invalid Date passed";
@@ -56,7 +61,7 @@ exports.processAccount = function(req, res) {
 			  function(callback) {
 			  	   //get account from database
 			  	 console.log("Getting data from database ...");
-                 getAccountData(req.body.account,function(status,resp){
+                 getAccountData(req,function(status,resp){
                       if (status){return callback(resp);}
                       else {callback(null, resp);}	
                    })                 
@@ -77,14 +82,14 @@ exports.processAccount = function(req, res) {
               ,
 			  function(c, callback) {
 			  	console.log("Checking if billing Cycle is Closed");
-			     BillingCycleClosed("January","2016",function(status,resp){
+			     BillingCycleClosed(req.body.month,req.body.year,function(status,resp){
                       if (status){return callback(resp);}
                       else {callback(null, c);}	
                    })
 			  },
 			  function(d, callback) {
 			  	console.log("Checking if Account Bill is Posted for the period");
-			     CheckIfBillIsPosted(req.body.account,"December6","2009",function(status,resp){
+			     CheckIfBillIsPosted(req.body.account,req.body.month,req.body.year,function(status,resp){
                       if (status){return callback(resp);}
                       else {callback(null, d);}	
                    })
@@ -121,7 +126,13 @@ exports.processAccount = function(req, res) {
 			  	
 			     PostData(g,function(status,resp){
                       if (status){return callback(resp);}
-                      else {callback(null, g);}	
+                      else {
+                      	InsertData(g,function(status,resp){
+                      		if (status){return callback(resp);}
+                      		else {callback(null, resp);}
+                      	})
+                      	
+                      }	
                    })
 			  }
 			  ], 
@@ -140,11 +151,12 @@ function(err, c) {
 }
 
 
-var getAccountData=function(accountnumber,callback){
+var getAccountData=function(req,callback){
      fb.attach(options, function(err, db) {
      	if (err){callback(true,"database Error")}
      	else {
      		//make this querry in config
+     		var accountnumber=req.body.account;
      		 var querry ="SELECT A.STATUS,A.CUSTOMER_NO,A.ACCT_TYPE,A.SUBCAT_ID,A.METER_NO,A.METER_MAKE,A.CONNECT_NO,A.INIT_MTR_READ,A.CURRENT_BAL, A.ZONE_ID,A.DISCONN_CODE,A.CATEGORY_ID,A.SEWER_CODE,A.ACCOUNT_NO,A.EST_CONS,A.METER_RENT,A.SEWER_ONLY FROM accounts_master A  WHERE A.ACCOUNT_NO='"+accountnumber+"'";
      		db.query(querry, function(err, result) {
      			 if (err){callback(true,"database Error");}
@@ -153,19 +165,28 @@ var getAccountData=function(accountnumber,callback){
      			 	if (result.length==0){callback(true,"Account does not Exists");}	
      			 	else {   
                              
-                           
+                             
      			 		     account.status=toStr(result[0].status);
                              account.disconn_code=toStr(result[0].disconn_code);
                              account.subcategory_id=result[0].subcat_id;
                              account.category_id=toStr(result[0].category_id);
                              account.Estimation_Constant=result[0].est_cons;
                              account.sewer_code=toStr(result[0].sewer_code);
-                              account.SewerOnly= "False";
-						      account.SewerAndWater= "False";
+                             account.zone1=toStr(result[0].zone_id);
+                               account.SewerOnly= "False";
+						       account.SewerAndWater= "False";
 						       account.WaterOnly= "False";
 						       account.DiscConn = "False";
 						       account.ConservOnly = "False";
                                account.accountnumber=accountnumber;
+                               account.mtr_read_date=req.body.date;
+                               account.meter_no=toStr(result[0].meter_no);
+
+                               account.posting_month=req.body.month;
+                               account.posting_year=req.body.year;
+
+                               
+                              
 						     //  console.log("Sewer Only " + toStr(result[0].sewer_only));
 						     //  console.log("Sewer Code " + toStr(result[0].sewer_code));
 
@@ -271,7 +292,7 @@ var CheckIfBillIsPosted=function (acctnumber,month,year,callback){
      			 		callback(false,"ok");
      			 	}	
      			 	else {   
-
+                           console.log(result);
                            callback(true,"The bill for this Account Has Already been Processed ");
      			 	}		      
      			 }	
@@ -282,7 +303,54 @@ var CheckIfBillIsPosted=function (acctnumber,month,year,callback){
         
      })
 	
-}     
+}   
+
+var InsertData=function(account,callback){
+
+
+//console.error(account);
+ 	var res={};
+     fb.attach(options, function(err, db) {
+
+    if (err)
+        {callback(true,"database Error");}
+
+  db.query('INSERT INTO TRANSACTIONS (TRANS_ID, INVOICE_NO, ACCT_NO, ESCALATED, MONTHOFREAD,'+ 
+'YEAROFREAD, WATER_PAID, WATER_OUTSTANDING, MTR_READ_DATE, PREV_MTR_READ, '+
+'CURR_MTR_READ, SEWER, METER_RENT, BIN_HIRE, WATER_DUE, LAST_RCPT_NO, BIN_CLEAR,'+
+'BUCKETS, CONSERVE, URINALS, INT_AMOUNT, RECONN_CHG, SHADOWDR, SHADOWCR, CREDITNOTE, '+
+ 'MONTH_DR, MONTH_CR, YEAR_DR, YEAR_CR, LEDGER_BAL, B30DAYS, B60DAYS, B90DAYS, ACCTDATE,'+ 
+ 'PREVBAL, UNITS_P, LAST_PAY_AMT, LAST_PAY_DATE, ZONE1, CAT, CONSERV_DUE, METER_DUE,'+ 
+ 'SEWER_DUE, TRANS_TYP, PREVBAL_DUE, DISCONN_CODE, METER_NO, BIN_HIREDUE,'+ 
+  'INT_AMOUNTDUE) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)RETURNING TRANS_ID ',
+    [account.tran_id, account.invoice_no, account.accountnumber, account.escalted, account.theMonth, 
+ account.theYear, account.water_paid, account.water_outstanding,  account.mtr_read_date, account.previousMeterReading, account.currentMeterReading, account.curTotSew, account.MtrRent, account.BIN_HIRE, account.curTotWat, 
+ account.last_rcpt_no, account.bin_clear, null, account.conserve, account.urinals, account.int_amount, account.reccon_chg, null, null, account.creditnote, null, null, 
+ null, null, account.ledger_bal, account.B30DAYS, account.B60DAYS, account.B90DAYS, account.acctdate, account.prevbal, account.units_p, 
+ account.last_pay_amt, account.last_pay_date, account.zone1, account.category_id, account.conserve_due, account.MtrRent, account.curTotSew, account.TRANS_TYP, account.prevbal, null, 
+ account.meter_no, null, null], function(err, result) {
+        // IMPORTANT: close the connection
+         if (err)
+        {   console.log("Error " + err);
+        	callback(true,"database Error");
+        }
+        else {
+        
+        	 res.status="Success";
+        	 res.Transaction_Id=result.trans_id;
+        
+        	callback(false,res);
+        }
+        db.detach();
+    });
+
+   
+
+});
+
+
+}
+
 var PostData = function (account,callback){
     
 
@@ -315,12 +383,49 @@ var PostData = function (account,callback){
     }
 
        
-var month = "January";
-var year = "2012";
+var month = account.posting_month
+var year = account.posting_year;
+
+
 
 var ThirtyDayBalance=dateYear(month,year,1);
 var SixtyDayBalance=dateYear(month,year,2);
 var NinetyDayBalance=dateYear(month,year,3);
+
+
+
+   var  WSRBLevy = 0.01 * (account.curTotSew + account.curTotWat);
+  account.WSRBLevy=parseFloat(WSRBLevy); 
+  account.BIN_HIRE = parseFloat(WSRBLevy);
+  account.BIN_HIREDUE= WSRBLevy;
+  account.LEDGER_BAL= account.curTotWat + account.MtrRent + account.curTotSew + account.ConserveAmt + account.prevBal + WSRBLevy;
+  account.TRANS_TYP= account.AccType;
+ 
+  //EditVal := CurTotWat + MtrRent + curTotSew + ConserveAmt;  ///haitumiki  ..
+
+
+  account.theMonth=month;
+  account.theYear=year;
+  account.escalted=0;  //hard coded for now Reveiw later
+  account.water_paid=0;
+  account.water_outstanding=account.curTotWat;
+  account.last_rcpt_no ='856437';
+  account.bin_clear=80;
+  account.conserve=40;
+  account.urinals=18000;
+  account.int_amount=0;
+   account.reccon_chg=0;
+   account.creditnote="Advance Payment";
+   account.ledger_bal=-115.15;
+   account.acctdate='06/27/2008 00:00:00.000';
+   account.prevbal=1553.55;
+   account.units_p=16;
+   account.last_pay_amt=3000;
+   account.last_pay_date='06/27/2008 00:00:00.000';
+   account.conserve_due=-40;
+   
+   account.invoice_no='160008';
+   
 
                   async.waterfall([
                   	         function(calback) {
@@ -370,6 +475,18 @@ var NinetyDayBalance=dateYear(month,year,3);
 
 				                      }	
 				                   })
+							  },
+							  function(b, calback) {
+							  	console.log("Generating Transaction ID");
+							  	 GenerateId(function(status,resp){
+				                      if (status){return callback(resp);}
+				                      else {
+
+				                      	account.tran_id=resp;
+				                      	calback(null, account);
+
+				                      }	
+				                   })
 							  }
 				              
 
@@ -377,7 +494,7 @@ var NinetyDayBalance=dateYear(month,year,3);
 
 						function(err, c) {
 							console.log("End of Posting ");
-							console.log(c);
+						
 						    if (err) {
 						        console.error("Error :", err);				        
 						        callback(true,"Database Error Kindly Contact Administrator");
@@ -554,7 +671,7 @@ var CalculateTarriff = function (account,callback){
 				                           account.tarrVal=tarrVal;
 				                           account.sewerVal=sewerVal;
 				                           account.myCount=myCount;
-				                           account.watDue = CurTotWat;
+				                           account.watDue = curTotWat;
                                            account.SewDue = curTotSew; 
 
 		                        }else {
@@ -685,7 +802,31 @@ var CalculateTarriff = function (account,callback){
   
          	
     
-  
+    var GenerateId = function (callback){
+         fb.attach(options, function(err, db) {
+     	if (err){callback(true,"database Error")}
+     	else {
+     		//make this querry in config
+     		 var querry ="select GEN_ID(gen_tran_id, 1) from RDB$DATABASE;";
+     		db.query(querry, function(err, result) {
+     			 if (err){
+     			 	callback(true,0);
+
+     			 }
+     			 else {
+     			 	
+     			  
+     			 	callback(false,result[0].gen_id);
+     			 }	
+
+     		});
+     	}	
+
+        
+     })
+}
+
+
 
   var TarrifTranchesData = function (categoryid,callback){
          fb.attach(options, function(err, db) {

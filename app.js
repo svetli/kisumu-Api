@@ -1,6 +1,5 @@
 
 var express=require('express');
-sys = require("sys");
 var db=require('./Database/firebird_database.js')
 var app=express();
 var bodyParser = require('body-parser');
@@ -25,9 +24,7 @@ console.log('Magic happens on port ' + port);
 
 
 
-app.get('/',function(req,res){
-   db.testStuff(req,res);
-});
+
 
 app.post('/account', function (req, res) {
 	db.processAccount(req,res);
