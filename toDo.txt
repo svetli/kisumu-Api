@@ -4,3 +4,13 @@ CREATE GENERATOR gen_tran_id;
 
 
 select GEN_ID(gen_tran_id, 1) from RDB$DATABASE;
+
+
+
+
+npm install -g pm2
+npm install -g pm2-web
+
+
+then start 
+pm2 start app.js -i max

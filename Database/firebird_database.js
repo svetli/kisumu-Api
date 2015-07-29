@@ -22,6 +22,10 @@ function toStr(obj){
 
 }
 
+function isEmpty(value){
+  return (value == null || value.length === 0);
+}
+
 function dateYear(month,year,n){
  var obj = {}
 	var monthNames = ["January", "February", "March", "April", "May", "June",
@@ -43,13 +47,13 @@ function dateYear(month,year,n){
    obj.year=year;
 
 
-    console.log("month " + obj.monthNumber);
-    console.log("month name " + obj.monthname);
-    console.log("year " + obj.year);
+   // console.log("month " + obj.monthNumber);
+   // console.log("month name " + obj.monthname);
+  //  console.log("year " + obj.year);
    }catch (err){
      obj.status=0;
      obj.error="Invalid Date passed";
-     console.log(err);
+    // console.log(err);
    }
 return obj;
 
@@ -77,7 +81,10 @@ exports.processAccount = function(req, res) {
 			  function(b, callback) {
 			  	console.log("Checking Disconnect Status ...");
 			     if (b.disconn_code!=0){callback("Account Disconnected")}
-			  	  else {callback(null, b);}
+			  	  else {
+			  	  	account.DiscConn = "False";
+			  	  	callback(null, b);
+			  	  }
 			  }
               ,
 			  function(c, callback) {
@@ -159,10 +166,13 @@ var getAccountData=function(req,callback){
      		var accountnumber=req.body.account;
      		 var querry ="SELECT A.STATUS,A.CUSTOMER_NO,A.ACCT_TYPE,A.SUBCAT_ID,A.METER_NO,A.METER_MAKE,A.CONNECT_NO,A.INIT_MTR_READ,A.CURRENT_BAL, A.ZONE_ID,A.DISCONN_CODE,A.CATEGORY_ID,A.SEWER_CODE,A.ACCOUNT_NO,A.EST_CONS,A.METER_RENT,A.SEWER_ONLY FROM accounts_master A  WHERE A.ACCOUNT_NO='"+accountnumber+"'";
      		db.query(querry, function(err, result) {
-     			 if (err){callback(true,"database Error");}
+     			 if (err){
+            console.log(err);
+            callback(true,"database Error");
+          }
      			 else {
      			 //	console.log(result);
-     			 	if (result.length==0){callback(true,"Account does not Exists");}	
+     			 	if (result.length==0){db.detach();callback(true,"Account does not Exists");}	
      			 	else {   
                              
                              
@@ -173,10 +183,12 @@ var getAccountData=function(req,callback){
                              account.Estimation_Constant=result[0].est_cons;
                              account.sewer_code=toStr(result[0].sewer_code);
                              account.zone1=toStr(result[0].zone_id);
+                            account.MtrRent=result[0].meter_rent;
+
                                account.SewerOnly= "False";
 						       account.SewerAndWater= "False";
 						       account.WaterOnly= "False";
-						       account.DiscConn = "False";
+						       
 						       account.ConservOnly = "False";
                                account.accountnumber=accountnumber;
                                account.mtr_read_date=req.body.date;
@@ -185,20 +197,26 @@ var getAccountData=function(req,callback){
                                account.posting_month=req.body.month;
                                account.posting_year=req.body.year;
 
+                               account.acctdate=req.body.date;
+
                                
                               
 						     //  console.log("Sewer Only " + toStr(result[0].sewer_only));
 						     //  console.log("Sewer Code " + toStr(result[0].sewer_code));
+						     //   console.log("Diconnect " + account.DiscConn);
 
                            if (toStr(result[0].sewer_only)==1 &&  account.DiscConn == "False"){account.SewerOnly= "True";}
                            if (toStr(result[0].sewer_code)=="Y" &&  account.DiscConn == "False"){account.SewerAndWater= "True";}
 
-                           if ((toStr(result[0].sewer_code)=="N" || toStr(result[0].sewer_code)=="") ||(toStr(result[0].sewer_code)==null && account.DiscConn == "False") ){account.WaterOnly= "True";}
-                           if ((toStr(result[0].sewer_code)=="N" || toStr(result[0].sewer_code)=="") ||(toStr(result[0].sewer_code)==null && account.DiscConn == "True") ){account.ConservOnly = "True";}
+                             if ( (toStr(result[0].sewer_code)=="N"  || isEmpty(result[0].sewer_code)) && account.DiscConn == "False" ){account.WaterOnly= "True";}
+                             if ( (toStr(result[0].sewer_code)=="N"  || isEmpty(result[0].sewer_code)) && account.DiscConn == "True" ){account.WaterOnly= "True";}
+                          // if (((toStr(result[0].sewer_code)=="N" || toStr(result[0].sewer_code)=="")) ||((toStr(result[0].sewer_code)==null && account.DiscConn == "False")) ){account.WaterOnly= "True";}
+                         //  if (((toStr(result[0].sewer_code)=="N" || toStr(result[0].sewer_code)=="") )||((toStr(result[0].sewer_code)==null && account.DiscConn == "True")) ){account.ConservOnly = "True";}
+                            db.detach();
                              callback(false,account);
      			 	}		      
      			 }	
-
+                     
      		});
      	}	
 
@@ -215,15 +233,15 @@ var getAccountData=function(req,callback){
      		 var querry ="SELECT * FROM LEDGER_BALS WHERE journ_month='"+ month+"' AND journ_year ='"+year+"'";
      		db.query(querry, function(err, result) {
      			 if (err){
-     			 	
+     			 	db.detach();
      			 	callback(true,err)
 
      			 }
      			 else {
      			 	
-     			 	if (result.length==0){callback(false,"ok");}	
+     			 	if (result.length==0){db.detach();callback(false,"ok");}	
      			 	else {   
-
+                           db.detach();
                            callback(true,"Billing Cycle Closed");
      			 	}		      
      			 }	
@@ -247,17 +265,17 @@ var compareMeterReading =function (AccountNo,CurMeter,callback){
      		//make this querry in config
      		 var querry ="select * from transactions where acct_no = '"+AccountNo+"' and escalated = 0 order by trans_id";
      		db.query(querry, function(err, result) {
-     			 if (err){callback(true,"database Error");}
+     			 if (err){db.detach();callback(true,"database Error");}
      			 else {
      			 	   
-     			 	if (result.length==0){callback(true,"New Account No Previous Transactions");}	
+     			 	if (result.length==0){db.detach();callback(true,"New Account No Previous Transactions");}	
      			 	else {   
 
 
                             account.currentMeterReading=CurMeter;
                             account.previousMeterReading=result[0].curr_mtr_read;
-                              if (account.currentMeterReading > CurMeter ){callback(true,"Invalid Meter Reading ");}
-                              else {callback(false,account);}	
+                              if (account.currentMeterReading > CurMeter ){db.detach();callback(true,"Invalid Meter Reading ");}
+                              else {db.detach();callback(false,account);}	
                              
      			 	}		      
      			 }	
@@ -282,6 +300,7 @@ var CheckIfBillIsPosted=function (acctnumber,month,year,callback){
      		db.query(querry, function(err, result) {
      			 if (err){
      			 	console.log(err);
+            db.detach();
      			 	callback(true,err)
 
      			 }
@@ -289,9 +308,10 @@ var CheckIfBillIsPosted=function (acctnumber,month,year,callback){
      			 	  
      			 	if (result.length==0){
      			 	//	 console.log(result);
+            db.detach();
      			 		callback(false,"ok");
      			 	}	
-     			 	else {   
+     			 	else {        db.detach();
                            console.log(result);
                            callback(true,"The bill for this Account Has Already been Processed ");
      			 	}		      
@@ -308,12 +328,17 @@ var CheckIfBillIsPosted=function (acctnumber,month,year,callback){
 var InsertData=function(account,callback){
 
 
-//console.error(account);
+console.error(account);
+
+console.error("Inserting Data ");	
  	var res={};
      fb.attach(options, function(err, db) {
 
     if (err)
-        {callback(true,"database Error");}
+        {  console.error("DB Error on Inserting Data ");
+      db.detach();
+        	callback(true,"database Error");
+        }
 
   db.query('INSERT INTO TRANSACTIONS (TRANS_ID, INVOICE_NO, ACCT_NO, ESCALATED, MONTHOFREAD,'+ 
 'YEAROFREAD, WATER_PAID, WATER_OUTSTANDING, MTR_READ_DATE, PREV_MTR_READ, '+
@@ -332,16 +357,17 @@ var InsertData=function(account,callback){
         // IMPORTANT: close the connection
          if (err)
         {   console.log("Error " + err);
+          db.detach();
         	callback(true,"database Error");
         }
         else {
         
         	 res.status="Success";
         	 res.Transaction_Id=result.trans_id;
-        
+        db.detach();
         	callback(false,res);
         }
-        db.detach();
+      
     });
 
    
@@ -355,6 +381,7 @@ var PostData = function (account,callback){
     
 
     if (account.WaterOnly=="True"){
+    	
     	 account.curTotSew = 0;
          account.SewerVal = 0;
      }
@@ -365,6 +392,7 @@ var PostData = function (account,callback){
     }
     if (account.DiscConn=="True"){
       // but this section will never apply for now 
+    
     	account.curTotWat=0;
     	account.tarrVal=0;
     	account.MtrRent=0;
@@ -375,6 +403,8 @@ var PostData = function (account,callback){
     }
 
     if (account.ConservOnly=="True"){
+
+    	
     	account.curTotSew = 0;
          account.SewerVal = 0;
          account.curTotWat = 0;
@@ -393,17 +423,10 @@ var SixtyDayBalance=dateYear(month,year,2);
 var NinetyDayBalance=dateYear(month,year,3);
 
 
-
-   var  WSRBLevy = 0.01 * (account.curTotSew + account.curTotWat);
-  account.WSRBLevy=parseFloat(WSRBLevy); 
-  account.BIN_HIRE = parseFloat(WSRBLevy);
-  account.BIN_HIREDUE= WSRBLevy;
-  account.LEDGER_BAL= account.curTotWat + account.MtrRent + account.curTotSew + account.ConserveAmt + account.prevBal + WSRBLevy;
-  account.TRANS_TYP= account.AccType;
  
   //EditVal := CurTotWat + MtrRent + curTotSew + ConserveAmt;  ///haitumiki  ..
 
-
+var ConserveAmt = 40;
   account.theMonth=month;
   account.theYear=year;
   account.escalted=0;  //hard coded for now Reveiw later
@@ -411,21 +434,36 @@ var NinetyDayBalance=dateYear(month,year,3);
   account.water_outstanding=account.curTotWat;
   account.last_rcpt_no ='856437';
   account.bin_clear=80;
-  account.conserve=40;
+  account.conserve=ConserveAmt;
+  account.ConserveAmt=ConserveAmt;
   account.urinals=18000;
   account.int_amount=0;
    account.reccon_chg=0;
    account.creditnote="Advance Payment";
-   account.ledger_bal=-115.15;
-   account.acctdate='06/27/2008 00:00:00.000';
+   
+  // account.acctdate='06/27/2008 00:00:00.000';
    account.prevbal=1553.55;
    account.units_p=16;
    account.last_pay_amt=3000;
-   account.last_pay_date='06/27/2008 00:00:00.000';
-   account.conserve_due=-40;
+   account.last_pay_date=account.acctdate;
+   account.conserve_due=ConserveAmt;
    
    account.invoice_no='160008';
-   
+
+
+
+   var  WSRBLevy = 0.01 * (account.curTotSew + account.curTotWat);
+    
+
+  account.WSRBLevy=parseFloat(WSRBLevy); 
+  account.BIN_HIRE = account.WSRBLevy
+  account.BIN_HIREDUE= account.WSRBLevy
+ 
+
+  
+  account.LEDGER_BAL= account.curTotWat + account.MtrRent + account.curTotSew + account.ConserveAmt + account.prevbal + account.WSRBLevy;
+  account.TRANS_TYP= account.AccType;
+  account.ledger_bal=account.LEDGER_BAL; 
 
                   async.waterfall([
                   	         function(calback) {
@@ -496,10 +534,13 @@ var NinetyDayBalance=dateYear(month,year,3);
 							console.log("End of Posting ");
 						
 						    if (err) {
-						        console.error("Error :", err);				        
-						        callback(true,"Database Error Kindly Contact Administrator");
+						    	console.error("Error :", err);	
+						    	callback(true,"Database Error Kindly Contact Administrator");
+						        			        
+						        
 						    }else{
-						       
+						      
+
 						       callback(false,c);
 
 						    }
@@ -530,11 +571,13 @@ var NinetyDayBalance=dateYear(month,year,3);
      		db.query(querry, function(err, result) {
      			 if (err){
      			 	console.log(err);
+            db.detach();
      			 	callback(true,err)
 
      			 }
      			 else {
-     			 	console.log(result)
+     			 	console.log(result);
+            db.detach();
      			 	callback(false,result);      
      			 }	
 
@@ -563,7 +606,13 @@ var CalculateTarriff = function (account,callback){
  var sewerVal ;
  var myCount = 0;
  var   DoneUnits = 0;
+
+    
+
    if (currunits <= 0){currunits=account.Estimation_Constant/1000}
+
+      
+
 
    	var subcategory =account.subcategory_id;
 
@@ -571,19 +620,22 @@ var CalculateTarriff = function (account,callback){
 
        	    case 10:
 							 console.log("Bulk Suppliers ..");
-				             console.log(utilities.Item_ID.type5);
-				             curTotWat =currunits * utilities.Item_ID.type5.Amount;
-				             curTotSew =currunits * utilities.Item_ID.type5.Amount;
-				             tarrVal =currunits * utilities.Item_ID.type5.Amount;
-				             sewerVal =currunits * utilities.Item_ID.type5.Amount;
+
+				             curTotWat =currunits * utilities.Item_ID.Bulk_Suppliers.Amount;
+				           
+				             curTotSew =currunits * utilities.Item_ID.Bulk_Suppliers.Amount;
+				             tarrVal =currunits * utilities.Item_ID.Bulk_Suppliers.Amount;
+				             sewerVal =currunits * utilities.Item_ID.Bulk_Suppliers.Amount;
 
 				               account.curTotWat =curTotWat;
 				               account.curTotSew =curTotSew;
 				               account.tarrVal=tarrVal;
 				               account.sewerVal=sewerVal;
 				               account.myCount=myCount;
-				               account.watDue = CurTotWat;
+				               account.watDue = curTotWat;
                                account.SewDue = curTotSew; 
+
+                               console.log(account);
 				               callback(false,account);
 				               break;
 
@@ -592,33 +644,33 @@ var CalculateTarriff = function (account,callback){
 				               console.log("Curent units " + currunits);
 
 
-				            if (currunits>= utilities.Item_ID.type4.LOWERL && currunits <= utilities.Item_ID.type4.UPPERL)
+				            if (currunits>= utilities.Item_ID.Kiosk.LOWERL && currunits <= utilities.Item_ID.Kiosk.UPPERL)
 				            {
-				               curTotWat =utilities.Item_ID.type4.Amount;
-				             curTotSew = utilities.Item_ID.type4.Amount;
-				             tarrVal =utilities.Item_ID.type4.Amount;
-				             sewerVal =utilities.Item_ID.type4.Amount;
+				               curTotWat =utilities.Item_ID.Kiosk.Amount;
+				             curTotSew = utilities.Item_ID.Kiosk.Amount;
+				             tarrVal =utilities.Item_ID.Kiosk.Amount;
+				             sewerVal =utilities.Item_ID.Kiosk.Amount;
 
 				               account.curTotWat =curTotWat;
 				               account.curTotSew =curTotSew;
 				               account.tarrVal=tarrVal;
 				               account.sewerVal=sewerVal;
 				               account.myCount=myCount;
-				               account.watDue = CurTotWat;
+				               account.watDue = curTotWat;
                                account.SewDue = curTotSew; 
 
 				            }
 				            else {
-				              curTotWat = utilities.Item_ID.type4.Amount + (utilities.Item_ID.type4.RATEABOVE * (currunits - utilities.Item_ID.type4.UPPERL));
-				                curTotSew = utilities.Item_ID.type4.Amount + (utilities.Item_ID.type4.RATEABOVE * (currunits - utilities.Item_ID.type4.UPPERL));
-				                tarrVal = utilities.Item_ID.type4.Amount + (utilities.Item_ID.type4.RATEABOVE * (currunits - utilities.Item_ID.type4.UPPERL));
-				                sewerVal = utilities.Item_ID.type4.Amount+ (utilities.Item_ID.type4.RATEABOVE * (currunits- utilities.Item_ID.type4.UPPERL));
+				              curTotWat = utilities.Item_ID.Kiosk.Amount + (utilities.Item_ID.Kiosk.RATEABOVE * (currunits - utilities.Item_ID.Kiosk.UPPERL));
+				                curTotSew = utilities.Item_ID.Kiosk.Amount + (utilities.Item_ID.Kiosk.RATEABOVE * (currunits - utilities.Item_ID.Kiosk.UPPERL));
+				                tarrVal = utilities.Item_ID.Kiosk.Amount + (utilities.Item_ID.Kiosk.RATEABOVE * (currunits - utilities.Item_ID.Kiosk.UPPERL));
+				                sewerVal = utilities.Item_ID.Kiosk.Amount+ (utilities.Item_ID.Kiosk.RATEABOVE * (currunits- utilities.Item_ID.Kiosk.UPPERL));
 				                 account.curTotWat =curTotWat;
 				               account.curTotSew =curTotSew;
 				               account.tarrVal=tarrVal;
 				               account.sewerVal=sewerVal;
 				               account.myCount=myCount;
-				               account.watDue = CurTotWat;
+				               account.watDue = curTotWat;
                                account.SewDue = curTotSew; 
 				            }
 				          callback(false,account);
@@ -627,32 +679,30 @@ var CalculateTarriff = function (account,callback){
             case 13:
 		       	       //KIWASCO Bulk Sales are billed specially
 		       	       console.log("KIWASKO  ..");
-		               console.log(utilities.Item_ID.type5);
-		               curTotWat =currunits * utilities.Item_ID.type5.Amount;
-		               curTotSew =currunits * utilities.Item_ID.type5.Amount;
-		               tarrVal =currunits * utilities.Item_ID.type5.Amount;
-		               sewerVal =currunits * utilities.Item_ID.type5.Amount;
+		               console.log(utilities.Item_ID.Kiwasko);
+		               curTotWat =currunits * utilities.Item_ID.Kiwasko.Amount;
+		               curTotSew =currunits * utilities.Item_ID.Kiwasko.Amount;
+		               tarrVal =currunits * utilities.Item_ID.Kiwasko.Amount;
+		               sewerVal =currunits * utilities.Item_ID.Kiwasko.Amount;
 
 		               account.curTotWat =curTotWat;
 		                 account.curTotSew =curTotSew;
 		                 account.tarrVal=tarrVal;
 		                 account.sewerVal=sewerVal;
 		                 account.myCount=myCount;
-		                 account.watDue = CurTotWat;
+		                 account.watDue = curTotWat;
                          account.SewDue = curTotSew; 
 		              callback(false,account);
 		              break;
 
        	    case 14:         
-          //Boarding Schools are billed separately 
-            //get the data from tarrif tranches 
-          //ZACK TO EXPLAIN ..MORE ON THE LOOP
+     
 		                console.log("boarding  ..");
 		                console.log("Current Units " + currunits);
 		                
 		                TarrifTranchesData("14",function(status,resp){
 		                      if (status){
-		                        // no record in the database table tarrif_tranches for category id 14
+		                      
 		                         callback(true,"Database Error Kindly Contact The Database Administrator");
                                   
 		                      }
@@ -660,7 +710,8 @@ var CalculateTarriff = function (account,callback){
 		                              var numRecord=resp.length;
 		                             //check if the current unit is greater than tarrif lower value for the First Record
 		                        if (currunits>= resp[0].lower_l && currunits <= resp[0].upper_l)
-		                        {
+
+		                        {      
 				                         curTotWat =resp[0].unit_price;
 				                         curTotSew = resp[0].sewerage;
 				                         tarrVal =resp[0].unit_price;
@@ -676,6 +727,7 @@ var CalculateTarriff = function (account,callback){
 
 		                        }else {
 		                          //there is a loop here ..zack to Clarify
+		                         
 		                               curTotWat =resp[0].unit_price;
 		                               curTotSew = resp[0].sewerage;
 		                               tarrVal =resp[0].unit_price;
@@ -683,12 +735,13 @@ var CalculateTarriff = function (account,callback){
 		                               Tupp=resp[0].upper_l;
 		                               myCount =2;
 
-		                          console.log("looping through the Tarrif values");
+		                     
 		                                        for (var i=1;i<numRecord;i++){
 					                              curTotWat = curTotWat + (resp[i].unit_price * (currunits - Tupp));
 					                              curTotSew = curTotSew + (resp[i].sewerage * (currunits - Tupp));
 					                              tarrVal = tarrVal + (resp[i].unit_price * (currunits - Tupp));
-					                              sewerVal = sewerVal+ (resp[i].sewerage * (currunits- Tupp));         
+					                              sewerVal = sewerVal+ (resp[i].sewerage * (currunits- Tupp));    
+                                              
 		                                            
 		                                           }
 
@@ -717,10 +770,12 @@ var CalculateTarriff = function (account,callback){
                       var incUnits =0;
                       var TarrLowerLimit;
                       var TarrUpperLimit;
-                     // var currentUnits
+                      curTotWat=0;
+                      curTotSew=0;
+                      myCount=0;
                       var TarrVal;
                       var SewerVal;
-                console.log("Others ....");
+                console.log("Others ....Current Units "+currunits);
 
                     
                 TarrifTranchesData(account.category_id,function(status,resp){
@@ -731,30 +786,33 @@ var CalculateTarriff = function (account,callback){
 		                      }
 		                      else {
 		                              var numRecord=resp.length;
-		                                
+		                             
 
 		                              for (var i=0;i<numRecord;i++){
                                         myCount = myCount + 1;
-					                    CurrentUnits= CurrentUnits - incUnits;
+					                    currunits= currunits - incUnits;
 					                    DoneUnits= DoneUnits + incUnits;
 
 		                              	TarrLowerLimit=resp[i].lower_l;
 		                              	TarrUpperLimit=resp[i].upper_l;
 		                              	TarrVal=resp[i].unit_price;
 		                              	SewerVal=resp[i].sewerage;
+
+		                         
+
 		                              	incUnits= (TarrUpperLimit - TarrLowerLimit)+1;
 
-		                              	  if (CurrentUnits < incUnits){
+		                              	  if (currunits < incUnits){
 		                              	  	  if (myCount == 1){
-	                                             CurTotWat = TarrVal;
+	                                             curTotWat = TarrVal;
 	                                             curTotSew = SewerVal;
 	                                             break;
                                               }
 		                              	  }
 
 		                              	  if (incUnits > 300){
-		                              	  	 incUnits = CurrentUnits;
-		                              	  	    if (CurrentUnits > 0){
+		                              	  	 incUnits = currunits;
+		                              	  	    if (currunits > 0){
                                                           if (myCount == 1){
                                                           	     incUnits = incunits -1;
 											                     curTotWat = TarrVal;
@@ -772,9 +830,9 @@ var CalculateTarriff = function (account,callback){
 
 		                              }
 
-		                              if (CurrentUnits != 0 && myCount != 1)  {
-		                              	   curTotWat = curTotWat + (CurrentUnits * TarrVal);
-                                           curTotSew = curTotSew + (CurrentUnits * SewerVal);
+		                              if (currunits != 0 && myCount != 1)  {
+		                              	   curTotWat = curTotWat + (currunits * TarrVal);
+                                           curTotSew = curTotSew + (currunits * SewerVal);
 		                              }
 		                             
 		                           account.curTotWat =curTotWat;
@@ -782,8 +840,9 @@ var CalculateTarriff = function (account,callback){
 		                           account.tarrVal=TarrVal;
 		                           account.sewerVal=SewerVal;
                                    account.myCount=myCount;
-                                   account.watDue = CurTotWat;
-                                   account.SewDue = curTotSew;                 
+                                   account.watDue = curTotWat;
+                                   account.SewDue = curTotSew;  
+                                     
 
                                    callback(false,account);
 		                      } 
@@ -810,12 +869,13 @@ var CalculateTarriff = function (account,callback){
      		 var querry ="select GEN_ID(gen_tran_id, 1) from RDB$DATABASE;";
      		db.query(querry, function(err, result) {
      			 if (err){
+            db.detach();
      			 	callback(true,0);
 
      			 }
      			 else {
      			 	
-     			  
+     			  db.detach();
      			 	callback(false,result[0].gen_id);
      			 }	
 
@@ -837,11 +897,12 @@ var CalculateTarriff = function (account,callback){
      		db.query(querry, function(err, result) {
      			 if (err){
      			 	console.log(err);
+            db.detach();
      			 	callback(true,err)
 
      			 }
      			 else {
-     			 	
+     			 	db.detach();
      			 	callback(false,result);      
      			 }	
 

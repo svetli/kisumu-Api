@@ -3,9 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
+    "async": "latest",
     "body-parser": "^1.13.2",
-    "express": "latest"
-  ,"async":"latest","node-firebird":"latest"},
+    "express": "latest",
+    "node-firebird": "latest",
+    "pm2": "^0.14.5"
+  },
   "engines": {
     "node": ">=0.10.0"
   }

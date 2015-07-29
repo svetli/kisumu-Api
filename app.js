@@ -24,7 +24,19 @@ console.log('Magic happens on port ' + port);
 
 
 
-
+app.get('/', function (req, response) {
+	 response.writeHead(200, {"Content-Type": "text/html"});
+  response.write("<!DOCTYPE html>");
+  response.write("<html>");
+  response.write("<head>");
+  response.write("<title>Api</title>");
+  response.write("</head>");
+  response.write("<body>");
+  response.write("Hi Api is Up And Running ");
+  response.write("</body>");
+  response.write("</html>");
+  response.end();
+});
 
 app.post('/account', function (req, res) {
 	db.processAccount(req,res);

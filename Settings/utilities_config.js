@@ -2,9 +2,9 @@ var Config = {};
 Config.utilities={};
 
 Config.Item_ID={
-       "type4":{ "Amount":100099,"LOWERL":10,"UPPERL":20,"RATEABOVE":300},
-       "type5":{ "Amount":1000},
-       "type6":{ "UNIT_PRICE":2000,"LOWER_L":5,"UPPER_L":20,"SEWERAGE":200}
+       "Kiosk":{ "Amount":400,"LOWER_L":0,"UPPER_L":10,"RATEABOVE":35},
+       "Bulk_Suppliers":{ "Amount":25,"LOWER_L":null,"UPPER_L":null,"SEWERAGE":null,"RATEABOVE":null},
+       "Kiwasko":{ "Amount":85,"LOWER_L":null,"UPPER_L":null,"SEWERAGE":null,"RATEABOVE":null}
 	  
 }
 
