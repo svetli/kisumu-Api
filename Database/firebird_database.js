@@ -1,13 +1,7 @@
 var fb  = require("node-firebird");
 var async = require("async");
 var utilities= require("../Settings/utilities_config.js");
-var options = {};
- 
-options.host = '127.0.0.1';
-options.port = 3050;
-options.database = 'C:\\Wizglobal\\database\\BILLING.FDB';
-options.user = 'SYSDBA';
-options.password = 'masterkey';
+
 
 
 
@@ -17,8 +11,12 @@ function ab2str(buf) {
    return String.fromCharCode.apply(null, new Uint16Array(buf));
 }
 function toStr(obj){
-
+   if (obj === undefined || obj === null) {
+    return 0;
+       }    
+   else {   
 	return obj.toString( 'utf8' );
+	  }
 
 }
 
@@ -60,11 +58,12 @@ return obj;
 }
 
 exports.processAccount = function(req, res) {
-
+console.log("The request from Client is ..");
+console.log(req.body);
   async.waterfall([
 			  function(callback) {
 			  	   //get account from database
-			  	 console.log("Getting data from database ...");
+			  	 console.log("Getting data from database for account ..."+req.body.account);
                  getAccountData(req,function(status,resp){
                       if (status){return callback(resp);}
                       else {callback(null, resp);}	
@@ -79,7 +78,7 @@ exports.processAccount = function(req, res) {
 
 			  },
 			  function(b, callback) {
-			  	console.log("Checking Disconnect Status ...");
+			  	console.log("Checking Disconnect Status ..."+b.disconn_code);
 			     if (b.disconn_code!=0){callback("Account Disconnected")}
 			  	  else {
 			  	  	account.DiscConn = "False";
@@ -88,14 +87,14 @@ exports.processAccount = function(req, res) {
 			  }
               ,
 			  function(c, callback) {
-			  	console.log("Checking if billing Cycle is Closed");
+			  	console.log("Checking if billing Cycle is Closed ");
 			     BillingCycleClosed(req.body.month,req.body.year,function(status,resp){
                       if (status){return callback(resp);}
                       else {callback(null, c);}	
                    })
 			  },
 			  function(d, callback) {
-			  	console.log("Checking if Account Bill is Posted for the period");
+			  	console.log("Checking if Account Bill is Posted for the period "+req.body.month);
 			     CheckIfBillIsPosted(req.body.account,req.body.month,req.body.year,function(status,resp){
                       if (status){return callback(resp);}
                       else {callback(null, d);}	
@@ -103,7 +102,7 @@ exports.processAccount = function(req, res) {
 			  }
                 ,
 			  function(e, callback) {
-			  	console.log("Compare Meter Reading ...");
+			  	console.log("Comparing Meter Reading ...");
 			  	
 			     compareMeterReading(req.body.account,req.body.meterreading,function(status,resp){
                       if (status){return callback(resp);}
@@ -146,6 +145,13 @@ exports.processAccount = function(req, res) {
 
 function(err, c) {
     if (err) {
+        
+        //Insert error data in the db table logs
+        var log={};
+        log.logtime = new Date();
+        log.account=req.body.account;
+        log.description=err;
+        LogError(log);
         console.error("Error :", err);
         res.status(200).json({"error":err});
     }else{
@@ -159,7 +165,7 @@ function(err, c) {
 
 
 var getAccountData=function(req,callback){
-     fb.attach(options, function(err, db) {
+     fb.attach(utilities.options, function(err, db) {
      	if (err){callback(true,"database Error")}
      	else {
      		//make this querry in config
@@ -172,10 +178,14 @@ var getAccountData=function(req,callback){
           }
      			 else {
      			 //	console.log(result);
-     			 	if (result.length==0){db.detach();callback(true,"Account does not Exists");}	
+     			 	if (result.length==0){db.detach();callback(true,"Account does not Exists/Or you sent an Invalid account Number " + req.body.account );}	
      			 	else {   
                              
-                             
+                           
+                            console.log("*****************  Account Data  ************************** ");
+                            console.log(result[0]);
+                            console.log("************** END of Account Data  ************************");
+
      			 		     account.status=toStr(result[0].status);
                              account.disconn_code=toStr(result[0].disconn_code);
                              account.subcategory_id=result[0].subcat_id;
@@ -183,7 +193,7 @@ var getAccountData=function(req,callback){
                              account.Estimation_Constant=result[0].est_cons;
                              account.sewer_code=toStr(result[0].sewer_code);
                              account.zone1=toStr(result[0].zone_id);
-                            account.MtrRent=result[0].meter_rent;
+                             account.MtrRent=result[0].meter_rent;
 
                                account.SewerOnly= "False";
 						       account.SewerAndWater= "False";
@@ -226,7 +236,7 @@ var getAccountData=function(req,callback){
 
    var BillingCycleClosed = function (month ,year,callback){
 
-       fb.attach(options, function(err, db) {
+       fb.attach(utilities.options, function(err, db) {
      	if (err){callback(true,"database Error")}
      	else {
      		//make this querry in config
@@ -258,8 +268,8 @@ var CheckIfBillIsDue=function (){
 } 
 
 var compareMeterReading =function (AccountNo,CurMeter,callback){
-
-      fb.attach(options, function(err, db) {
+console.log("Current Meter Reading " + CurMeter);
+      fb.attach(utilities.options, function(err, db) {
      	if (err){callback(true,"database Error")}
      	else {
      		//make this querry in config
@@ -271,10 +281,32 @@ var compareMeterReading =function (AccountNo,CurMeter,callback){
      			 	if (result.length==0){db.detach();callback(true,"New Account No Previous Transactions");}	
      			 	else {   
 
-
-                            account.currentMeterReading=CurMeter;
+                            console.log("********************Trasanctions Details *****************");
+                             console.log(result[0]);
+                             console.log("********************END Trasanctions*****************");
+                            try {
+                            account.currentMeterReading=parseInt(CurMeter);
+                             }catch(Exception){
+                                 account.currentMeterReading=0;
+                             }
                             account.previousMeterReading=result[0].curr_mtr_read;
-                              if (account.currentMeterReading > CurMeter ){db.detach();callback(true,"Invalid Meter Reading ");}
+                            try {
+                            account.urinals=toStr(result[0].urinals);
+                             }catch(Exception){
+                                 account.urinals=0;
+                             }
+                            account.last_rcpt_no=toStr(result[0].last_rcpt_no);
+                             
+                            account.creditnote="Test Creditnote";//toStr(result[0].creditnote);
+                            account.bin_clear=result[0].bin_clear;
+                            account.currentbal=result[0].ledger_bal;
+                            account.units_p=result[0].units_p;
+                            account.last_pay_amt=result[0].last_pay_amt;
+                          
+                            account.escalted=toStr(result[0].escalted);
+                            
+                            account.water_paid=result[0].water_paid;
+                              if (account.previousMeterReading > account.currentMeterReading ){db.detach();callback(true,"Invalid Meter Reading .Previous Reading ( "+account.previousMeterReading+ ") Cannot be Greater than Current Reading  ("+account.currentMeterReading+")") }
                               else {db.detach();callback(false,account);}	
                              
      			 	}		      
@@ -292,7 +324,7 @@ var compareMeterReading =function (AccountNo,CurMeter,callback){
 }
 var CheckIfBillIsPosted=function (acctnumber,month,year,callback){
 
-       fb.attach(options, function(err, db) {
+       fb.attach(utilities.options, function(err, db) {
      	if (err){callback(true,"database Error")}
      	else {
      		//make this querry in config
@@ -313,7 +345,7 @@ var CheckIfBillIsPosted=function (acctnumber,month,year,callback){
      			 	}	
      			 	else {        db.detach();
                            console.log(result);
-                           callback(true,"The bill for this Account Has Already been Processed ");
+                           callback(true,"The bill for the month of ("+month+") for  Account ("+acctnumber+") Has Already been Processed ");
      			 	}		      
      			 }	
 
@@ -328,18 +360,21 @@ var CheckIfBillIsPosted=function (acctnumber,month,year,callback){
 var InsertData=function(account,callback){
 
 
-console.error(account);
 
-console.error("Inserting Data ");	
+
+
+console.error("************** Data to Be Inserted *********************");
+console.error(account);	
+console.error("*********** END of Data to be Inserted  *****************");
  	var res={};
-     fb.attach(options, function(err, db) {
+     fb.attach(utilities.options, function(err, db) {
 
     if (err)
         {  console.error("DB Error on Inserting Data ");
-      db.detach();
+            db.detach();
         	callback(true,"database Error");
         }
-
+     else {
   db.query('INSERT INTO TRANSACTIONS (TRANS_ID, INVOICE_NO, ACCT_NO, ESCALATED, MONTHOFREAD,'+ 
 'YEAROFREAD, WATER_PAID, WATER_OUTSTANDING, MTR_READ_DATE, PREV_MTR_READ, '+
 'CURR_MTR_READ, SEWER, METER_RENT, BIN_HIRE, WATER_DUE, LAST_RCPT_NO, BIN_CLEAR,'+
@@ -347,30 +382,32 @@ console.error("Inserting Data ");
  'MONTH_DR, MONTH_CR, YEAR_DR, YEAR_CR, LEDGER_BAL, B30DAYS, B60DAYS, B90DAYS, ACCTDATE,'+ 
  'PREVBAL, UNITS_P, LAST_PAY_AMT, LAST_PAY_DATE, ZONE1, CAT, CONSERV_DUE, METER_DUE,'+ 
  'SEWER_DUE, TRANS_TYP, PREVBAL_DUE, DISCONN_CODE, METER_NO, BIN_HIREDUE,'+ 
-  'INT_AMOUNTDUE) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)RETURNING TRANS_ID ',
+  'INT_AMOUNTDUE) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
     [account.tran_id, account.invoice_no, account.accountnumber, account.escalted, account.theMonth, 
  account.theYear, account.water_paid, account.water_outstanding,  account.mtr_read_date, account.previousMeterReading, account.currentMeterReading, account.curTotSew, account.MtrRent, account.BIN_HIRE, account.curTotWat, 
  account.last_rcpt_no, account.bin_clear, null, account.conserve, account.urinals, account.int_amount, account.reccon_chg, null, null, account.creditnote, null, null, 
  null, null, account.ledger_bal, account.B30DAYS, account.B60DAYS, account.B90DAYS, account.acctdate, account.prevbal, account.units_p, 
  account.last_pay_amt, account.last_pay_date, account.zone1, account.category_id, account.conserve_due, account.MtrRent, account.curTotSew, account.TRANS_TYP, account.prevbal, null, 
- account.meter_no, null, null], function(err, result) {
+ account.meter_no, null, null], 
+
+ function(err, result) {
         // IMPORTANT: close the connection
          if (err)
-        {   console.log("Error " + err);
-          db.detach();
+        {   console.log(err);
+            db.detach();
         	callback(true,"database Error");
         }
         else {
         
         	 res.status="Success";
-        	 res.Transaction_Id=result.trans_id;
-        db.detach();
+        	 res.Transaction_Id=account.tran_id;
+             db.detach();
         	callback(false,res);
         }
       
     });
 
-   
+   }
 
 });
 
@@ -385,7 +422,7 @@ var PostData = function (account,callback){
     	 account.curTotSew = 0;
          account.SewerVal = 0;
      }
-    if (account.SewerAndWater=="True" && SewerOnly=="False") {
+    if (account.SewerAndWater=="True" && account.SewerOnly=="False") {
 
     	 account.curTotWat = account.watDue;
          account.curTotSew = account.SewDue;
@@ -429,22 +466,23 @@ var NinetyDayBalance=dateYear(month,year,3);
 var ConserveAmt = 40;
   account.theMonth=month;
   account.theYear=year;
-  account.escalted=0;  //hard coded for now Reveiw later
-  account.water_paid=0;
+ // account.escalted=0;  //hard coded for now Reveiw later
+
+ // account.water_paid=0;
   account.water_outstanding=account.curTotWat;
-  account.last_rcpt_no ='856437';
-  account.bin_clear=80;
+ // account.last_rcpt_no =account.last_rcpt_no;
+ // account.bin_clear=80;
   account.conserve=ConserveAmt;
   account.ConserveAmt=ConserveAmt;
-  account.urinals=18000;
+  account.urinals=account.urinals;
   account.int_amount=0;
    account.reccon_chg=0;
-   account.creditnote="Advance Payment";
+  // account.creditnote='';//"Advance Payment";
    
   // account.acctdate='06/27/2008 00:00:00.000';
-   account.prevbal=1553.55;
-   account.units_p=16;
-   account.last_pay_amt=3000;
+   account.prevbal=account.currentbal;
+  // account.units_p=16;
+  // account.last_pay_amt=3000;
    account.last_pay_date=account.acctdate;
    account.conserve_due=ConserveAmt;
    
@@ -473,7 +511,9 @@ var ConserveAmt = 40;
 				                      if (status){return callback(resp);}
 				                      else {
 				                      	     if (resp.length !=0){
-				                                 	account.B30DAYS=parseFloat(resp[0].due) - parseFloat(resp[0].urinals);
+				                      	     	  var urinals = resp[0].urinals;
+					                      	  	   if (urinals ===null){urinals=0;}
+				                                 	account.B30DAYS=parseFloat(resp[0].due) - parseFloat(urinals);
 				                      	     }else {account.B30DAYS=0 // new Customer
 				                      	     }
 
@@ -490,7 +530,9 @@ var ConserveAmt = 40;
 					                      if (status){return callback(resp);}
 					                      else {
 					                      	  if (resp.length !=0){
-				                                 	account.B60DAYS=parseFloat(resp[0].due) - parseFloat(resp[0].urinals);
+					                      	  	 var urinals = resp[0].urinals;
+					                      	  	   if (urinals ===null){urinals=0;}
+				                                 	account.B60DAYS=parseFloat(resp[0].due) - parseFloat(urinals);
 				                      	     }else {account.B60DAYS=0 // new Customer
 				                      	     }
 
@@ -506,7 +548,9 @@ var ConserveAmt = 40;
 				                      else {
 
 				                      	 if (resp.length !=0){
-				                                 	account.B90DAYS=parseFloat(resp[0].due) - parseFloat(resp[0].urinals);
+				                      	 	   	var urinals = resp[0].urinals;
+					                      	  	   if (urinals ===null){urinals=0;}
+				                                 	account.B90DAYS=parseFloat(resp[0].due) - parseFloat(urinals);
 				                      	     }else {account.B90DAYS=0 // new Customer
 				                      	     }
 				                      	calback(null, account);
@@ -519,7 +563,7 @@ var ConserveAmt = 40;
 							  	 GenerateId(function(status,resp){
 				                      if (status){return callback(resp);}
 				                      else {
-
+                                        console.log("Tran_id Generated " + resp);
 				                      	account.tran_id=resp;
 				                      	calback(null, account);
 
@@ -531,7 +575,7 @@ var ConserveAmt = 40;
                             ], 
 
 						function(err, c) {
-							console.log("End of Posting ");
+							
 						
 						    if (err) {
 						    	console.error("Error :", err);	
@@ -561,7 +605,7 @@ var ConserveAmt = 40;
 
 
   var AgingBalances = function (accountnumber,prevmonth,prevmonthyear,callback){
-         fb.attach(options, function(err, db) {
+         fb.attach(utilities.options, function(err, db) {
      	if (err){callback(true,"Database Error")}
      	else {
      		//make this querry in config
@@ -571,13 +615,13 @@ var ConserveAmt = 40;
      		db.query(querry, function(err, result) {
      			 if (err){
      			 	console.log(err);
-            db.detach();
+                      db.detach();
      			 	callback(true,err)
 
      			 }
      			 else {
      			 	console.log(result);
-            db.detach();
+                     db.detach();
      			 	callback(false,result);      
      			 }	
 
@@ -862,11 +906,13 @@ var CalculateTarriff = function (account,callback){
          	
     
     var GenerateId = function (callback){
-         fb.attach(options, function(err, db) {
+         fb.attach(utilities.options, function(err, db) {
      	if (err){callback(true,"database Error")}
      	else {
      		//make this querry in config
-     		 var querry ="select GEN_ID(gen_tran_id, 1) from RDB$DATABASE;";
+     		 var querry ="select GEN_ID(gen_tran_id, 1) from RDB$DATABASE;"; //use this locally 
+     		  var querry ="select GEN_ID(transno, 1) from RDB$DATABASE;"; //use this on server
+     		 
      		db.query(querry, function(err, result) {
      			 if (err){
             db.detach();
@@ -889,7 +935,7 @@ var CalculateTarriff = function (account,callback){
 
 
   var TarrifTranchesData = function (categoryid,callback){
-         fb.attach(options, function(err, db) {
+         fb.attach(utilities.options, function(err, db) {
      	if (err){callback(true,"database Error")}
      	else {
      		//make this querry in config
@@ -911,9 +957,35 @@ var CalculateTarriff = function (account,callback){
 
         
      })
+
+     
 }
 
+ var LogError = function (log){
+  console.log("loging Error to DB " + log);
 
+      	 fb.attach(utilities.options, function(err, db) {
+     	if (err){console.log("Error in logging the log " + log);}
+     	else {
+     		  db.query('INSERT INTO LOGS (logtime, account, description) VALUES (?,?,?)',
+                        [log.logtime,log.account,log.description],function(err, result) {
+     			 if (err){
+                    db.detach();
+
+     			 }
+     			 else {
+     			 	
+     			    db.detach();
+     			
+     			 }	
+
+     		});
+     	}	
+
+        
+     })
+
+      }   
 	
 
 

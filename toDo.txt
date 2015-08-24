@@ -14,3 +14,19 @@ npm install -g pm2-web
 
 then start 
 pm2 start app.js -i max
+
+
+pm2-web  install
+
+npm install --unsafe-perm --verbose -g pm2-web
+
+
+Create LOGS TABLE
+
+
+CREATE TABLE logs(
+
+  logtime  varchar(12),
+  account  varchar(20),
+  description varchar(30)
+);
